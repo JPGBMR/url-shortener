@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'feat/**']
+  pull_request:
+    branches: [main]
+
+jobs:
+  # Job id must be exactly 'lint' — branch protection context is 'CI / lint'
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Lint with HTMLHint
+        run: npx --yes htmlhint '**/*.html' --ignore 'node_modules/**'
+
+      - name: Start local server
+        run: |
+          npx --yes http-server . -p 8080 --silent &
+          sleep 3
+
+      - name: Run Lighthouse CI
+        continue-on-error: true
+        run: |
+          npx --yes @lhci/cli autorun \
+            --collect.url=http://localhost:8080 \
+            --collect.numberOfRuns=1 \
+            --assert.preset=lighthouse:no-pwa \
+            --upload.target=temporary-public-storage
+
+      - name: Stop local server
+        if: always()
+        run: kill $(lsof -t -i:8080) 2>/dev/null || true
